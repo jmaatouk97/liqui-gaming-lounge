@@ -1,0 +1,229 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --lq-radius: 16px;
+    --color-lq-scrim: var(--lq-scrim);
+    --color-lq-danger-text: var(--lq-danger-text);
+    --color-lq-danger: var(--lq-danger);
+    --color-lq-accent: var(--lq-accent);
+    --color-lq-control-rim: var(--lq-control-rim);
+    --color-lq-control: var(--lq-control);
+    --color-lq-highlight: var(--lq-highlight);
+    --lq-shadow: var(--lq-shadow);
+    --color-lq-rim-lo: var(--lq-rim-lo);
+    --color-lq-rim-hi: var(--lq-rim-hi);
+    --color-lq-tint-deep: var(--lq-tint-deep);
+    --color-lq-tint: var(--lq-tint);
+    --color-lq-text-dim: var(--lq-text-dim);
+    --color-lq-text: var(--lq-text);
+}
+
+:root {
+    --lq-text: rgba(28, 28, 40, 0.95);
+    --lq-text-dim: rgba(28, 28, 40, 0.55);
+    --lq-tint: rgba(255, 255, 255, 0.48);
+    --lq-tint-deep: rgba(255, 255, 255, 0.14);
+    --lq-rim-hi: rgba(255, 255, 255, 0.85);
+    --lq-rim-lo: rgba(255, 255, 255, 0.28);
+    --lq-shadow: 0 24px 60px rgba(10, 15, 40, 0.35), 0 4px 14px rgba(10, 15, 40, 0.18);
+    --lq-highlight: rgba(255, 255, 255, 0.5);
+    --lq-control: rgba(255, 255, 255, 0.72);
+    --lq-control-rim: rgba(28, 28, 40, 0.16);
+    --lq-accent: #2f6bff;
+    --lq-danger: #e5484d;
+    --lq-danger-text: #c1272c;
+    --lq-scrim: rgba(12, 14, 28, 0.32);
+}
+
+.dark {
+    --lq-text: rgba(245, 246, 255, 0.96);
+    --lq-text-dim: rgba(245, 246, 255, 0.55);
+    --lq-tint: rgba(30, 32, 46, 0.62);
+    --lq-tint-deep: rgba(18, 20, 32, 0.4);
+    --lq-rim-hi: rgba(255, 255, 255, 0.5);
+    --lq-rim-lo: rgba(255, 255, 255, 0.12);
+    --lq-shadow: 0 24px 60px rgba(0, 0, 5, 0.55), 0 4px 14px rgba(0, 0, 5, 0.35);
+    --lq-highlight: rgba(255, 255, 255, 0.18);
+    --lq-control: rgba(126, 128, 146, 0.3);
+    --lq-control-rim: rgba(255, 255, 255, 0.22);
+    --lq-accent: #6f9dff;
+    --lq-danger: #ff7076;
+    --lq-danger-text: #ff7076;
+    --lq-scrim: rgba(0, 0, 6, 0.48);
+}
+
+/* ───────── App layer: fonts, ambient backdrop, flat helpers ───────── */
+:root {
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+  --base-bg-a: #f4f6fa;
+  --base-bg-b: #ffffff;
+  --theme-primary: #2f6bff;
+  --theme-secondary: #93b4ff;
+  --theme-surface-tint: #eef2ff;
+  --theme-ambient-1: #6f9dff;
+  --theme-ambient-2: #93b4ff;
+  --theme-ambient-3: #eef2ff;
+  --orb-alpha: 0.55;
+}
+.dark {
+  --base-bg-a: #0b0d12;
+  --base-bg-b: #141821;
+  --orb-alpha: 0.7;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--lq-text);
+  background: linear-gradient(160deg, var(--base-bg-a), var(--base-bg-b));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+.f-display {
+  font-family: var(--font-display);
+}
+.f-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ambient backdrop — gives the glass bezels real edges to refract. */
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ambient .orb {
+  position: absolute;
+  border-radius: 9999px;
+  opacity: var(--orb-alpha);
+}
+.ambient .o1 {
+  width: 46vmax;
+  height: 46vmax;
+  left: -12vmax;
+  top: -16vmax;
+  background: radial-gradient(circle at 35% 35%, var(--theme-ambient-1), transparent 66%);
+}
+.ambient .o2 {
+  width: 40vmax;
+  height: 40vmax;
+  right: -10vmax;
+  top: 8vh;
+  background: radial-gradient(circle at 60% 40%, var(--theme-ambient-2), transparent 66%);
+}
+.ambient .o3 {
+  width: 44vmax;
+  height: 44vmax;
+  left: 22vw;
+  bottom: -26vmax;
+  background: radial-gradient(circle at 50% 40%, var(--theme-ambient-3), transparent 68%);
+}
+.ambient .grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--lq-text) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--lq-text) 8%, transparent) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse at 50% 40%, #000 20%, transparent 78%);
+}
+.ambient .ring {
+  position: absolute;
+  border-radius: 9999px;
+  border: 2px solid color-mix(in srgb, var(--theme-primary) 40%, transparent);
+}
+.ambient .r1 {
+  width: 34vmax;
+  height: 34vmax;
+  right: 6vw;
+  bottom: -8vmax;
+}
+.ambient .r2 {
+  width: 22vmax;
+  height: 22vmax;
+  left: 8vw;
+  top: 30vh;
+  border-color: color-mix(in srgb, var(--theme-secondary) 36%, transparent);
+}
+
+/* Flat inner rows — translucent, never opaque, they sit inside glass panels. */
+.row-flat {
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--lq-text) 5%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lq-text) 7%, transparent);
+}
+.hair {
+  border-color: color-mix(in srgb, var(--lq-text) 10%, transparent);
+}
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lq-text-dim);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+.live-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+
+/* Tactile press for plain controls */
+.press {
+  transition: transform 150ms ease, background-color 150ms ease;
+}
+.press:active {
+  transform: scale(0.97);
+}
+.press:focus-visible {
+  outline: 2px solid var(--lq-accent);
+  outline-offset: 2px;
+}
+.press:hover {
+  background-color: color-mix(in srgb, var(--lq-text) 8%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.ambient .orb,
+.ambient .ring {
+  transition: opacity 300ms ease;
+}
+.ambient {
+  opacity: var(--orb-alpha-scale, 1);
+}
+[data-density="compact"] .row-flat {
+  padding-block: 6px;
+}
