@@ -22,6 +22,10 @@ export interface ActivityItem {
   amount: number;
   at: string;
 }
+export type PayMethod = "cash" | "card" | "balance" | "tab";
+export type CheckoutResult =
+  | { ok: true; total: number; count: number; target: string | null; method: PayMethod }
+  | { ok: false; reason: string };
 export interface NetPoint {
   t: number;
   up: number;
@@ -45,6 +49,8 @@ interface AppState {
   cafeQuery: string;
   cart: CartLine[];
   cartTarget: string | null;
+  cartMember: string | null;
+  locked: Record<string, boolean>;
   stations: Station[];
   stock: InventoryItem[];
   members: Member[];
@@ -62,7 +68,9 @@ interface AppState {
   removeLine: (id: string) => void;
   clearCart: () => void;
   setCartTarget: (id: string | null) => void;
-  checkout: () => { total: number; count: number; target: string | null };
+  setCartMember: (id: string | null) => void;
+  toggleLock: (id: string) => void;
+  checkout: (method: PayMethod, discountPct: number) => CheckoutResult;
   startSession: (id: string, minutes: number, member?: string) => void;
   extendSession: (id: string, minutes: number) => void;
   endSession: (id: string) => void;
@@ -88,6 +96,8 @@ export const useApp = create<AppState>((set, get) => ({
   cafeQuery: "",
   cart: [],
   cartTarget: null,
+  cartMember: null,
+  locked: {},
   stations: stationSeed,
   stock: inventorySeed,
   members: memberSeed,
@@ -115,29 +125,44 @@ export const useApp = create<AppState>((set, get) => ({
     })),
   removeLine: (id) => set((s) => ({ cart: s.cart.filter((l) => l.productId !== id) })),
   clearCart: () => set({ cart: [] }),
-  setCartTarget: (cartTarget) => set({ cartTarget }),
+  setCartTarget: (cartTarget) => set({ cartTarget, cartMember: null }),
+  setCartMember: (cartMember) => set({ cartMember, cartTarget: null }),
+  toggleLock: (id) => set((s) => ({ locked: { ...s.locked, [id]: !s.locked[id] } })),
 
-  checkout: () => {
+  checkout: (method, discountPct) => {
     const s = get();
-    const total = cartTotal(s.cart);
+    const sub = cartTotal(s.cart);
     const count = s.cart.reduce((n, l) => n + l.qty, 0);
     const target = s.cartTarget;
-    if (!count) return { total: 0, count: 0, target };
+    if (!count) return { ok: false, reason: "Cart is empty" };
+    const total = Math.round(sub * (1 - discountPct / 100) * 100) / 100;
+    const station = target ? s.stations.find((x) => x.id === target) : undefined;
+    const payer =
+      s.members.find((m) => m.id === s.cartMember) ?? s.members.find((m) => m.name === station?.member);
+    let members = s.members;
+    if (method === "balance") {
+      if (!payer) return { ok: false, reason: "Assign a member first" };
+      if (payer.balance < total) return { ok: false, reason: `${payer.name} balance is $${payer.balance.toFixed(2)}` };
+      members = s.members.map((m) => (m.id === payer.id ? { ...m, balance: Math.round((m.balance - total) * 100) / 100 } : m));
+    }
+    if (method === "tab" && !target) return { ok: false, reason: "Assign a PC for a tab" };
     const names = s.cart
-      .map((l) => `${l.qty}× ${products.find((p) => p.id === l.productId)?.name}`)
+      .map((l) => `${l.qty}x ${products.find((p) => p.id === l.productId)?.name}`)
       .slice(0, 2)
       .join(", ");
     set({
       cart: [],
       cartTarget: null,
+      cartMember: null,
+      members,
       orders: s.orders + 1,
       revenueToday: Math.round((s.revenueToday + total) * 100) / 100,
       activity: [
-        { id: `a${uid++}`, station: target ?? "Cafe", member: "Walk-in", detail: names, amount: total, at: "now" },
+        { id: `a${uid++}`, station: target ?? "Cafe", member: payer?.name ?? "Walk-in", detail: names, amount: total, at: "now" },
         ...s.activity,
       ].slice(0, 12),
     });
-    return { total, count, target };
+    return { ok: true, total, count, target, method };
   },
 
   startSession: (id, minutes, member = "Walk-in") =>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Minus, Plus, Search, ShoppingBag, Trash2, Wrench } from "lucide-react";
+import { Banknote, CreditCard, Lock, Map as MapIcon, Minus, Plus, Receipt, Search, ShoppingBag, Trash2, Unlock, Wallet, Wrench, type LucideIcon } from "lucide-react";
 import { Badge, Empty, LiveDot, PageHeader, Panel, Row, SectionHead, Scroll, statusTone, usd } from "@/components/Bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,19 @@ import { Switch, SwitchLabel } from "@/components/ui/switch";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { products, ZONES, type Station } from "@/data";
-import { cartTotal, useApp } from "@/store";
+import { cartTotal, useApp, type PayMethod } from "@/store";
 import { fmtClock, useNow } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
 const CATS = ["All", "Gaming", "Hot Drinks", "Cold Drinks", "Snacks", "Meals"];
+const CAT_LABEL: Record<string, string> = { Gaming: "Gaming Packages" };
+const PAY: { v: PayMethod; label: string; icon: LucideIcon }[] = [
+  { v: "cash", label: "Cash", icon: Banknote },
+  { v: "card", label: "Card", icon: CreditCard },
+  { v: "balance", label: "Balance", icon: Wallet },
+  { v: "tab", label: "PC Tab", icon: Receipt },
+];
+const DISCOUNTS = [0, 5, 10, 15, 20].map((d) => ({ label: d ? `${d}% off` : "No discount", value: String(d) }));
 
 export default function Cafe() {
   const mode = useApp((s) => s.cafeMode);
@@ -27,11 +35,15 @@ export default function Cafe() {
       <PageHeader
         title="Cafe & Floor"
         right={
-          <Tabs value={mode} onValueChange={(v) => setMode(v as "pos" | "floor")} className="w-[190px]">
-            <TabsList>
+          <Tabs value={mode} onValueChange={(v) => setMode(v as "pos" | "floor")} className="w-[min(320px,100%)]">
+            <TabsList aria-label="Workspace mode">
               <TabsIndicator />
-              <TabsTab value="pos">POS</TabsTab>
-              <TabsTab value="floor">Floor</TabsTab>
+              <TabsTab value="pos">
+                <ShoppingBag size={15} /> POS &amp; Cart
+              </TabsTab>
+              <TabsTab value="floor">
+                <MapIcon size={15} /> Floor Map
+              </TabsTab>
             </TabsList>
           </Tabs>
         }
@@ -43,9 +55,12 @@ export default function Cafe() {
 
 /* ───────────────────────── POS ───────────────────────── */
 function Pos() {
-  const { activeCategory, setCategory, cafeQuery, setCafeQuery, cart, addItem, decItem, removeLine, clearCart, cartTarget, setCartTarget, checkout } = useApp();
+  const { activeCategory, setCategory, cafeQuery, setCafeQuery, cart, addItem, decItem, removeLine, clearCart, cartTarget, cartMember, setCartTarget, setCartMember, checkout } = useApp();
   const stations = useApp((s) => s.stations);
+  const members = useApp((s) => s.members);
   const toast = useToast();
+  const [pay, setPay] = useState<PayMethod>("cash");
+  const [disc, setDisc] = useState("0");
   const list = useMemo(
     () =>
       products.filter(
@@ -55,14 +70,25 @@ function Pos() {
       ),
     [activeCategory, cafeQuery],
   );
-  const total = cartTotal(cart);
-  const targets = [
-    { label: "Counter", value: "counter" },
-    ...stations.filter((s) => s.status === "in-use").map((s) => ({ label: `${s.id} · ${s.member}`, value: s.id })),
+  const sub = cartTotal(cart);
+  const discount = Math.round(sub * (Number(disc) / 100) * 100) / 100;
+  const total = Math.round((sub - discount) * 100) / 100;
+
+  const targetStation = stations.find((s) => s.id === cartTarget);
+  const payer = members.find((m) => m.id === cartMember) ?? members.find((m) => m.name === targetStation?.member);
+  const assigned = [
+    { label: "Walk-in", value: "walk" },
+    ...stations
+      .filter((s) => s.status !== "maintenance")
+      .map((s) => ({ label: `${s.id}${s.member ? ` · ${s.member}` : ""}`, value: `pc:${s.id}` })),
+    ...members.filter((m) => m.status !== "banned").map((m) => ({ label: `${m.name} · member`, value: `m:${m.id}` })),
   ];
+  const assignValue = cartTarget ? `pc:${cartTarget}` : cartMember ? `m:${cartMember}` : "walk";
+  const can: Record<PayMethod, boolean> = { cash: true, card: true, balance: !!payer, tab: !!cartTarget };
+  const payEff = can[pay] ? pay : "cash";
 
   return (
-    <div className="grid gap-3 xl:grid-cols-[1fr_360px]">
+    <div className="grid gap-3 xl:grid-cols-[1fr_380px]">
       <Panel>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <ToggleGroup
@@ -73,7 +99,7 @@ function Pos() {
           >
             {CATS.map((c) => (
               <Toggle key={c} value={c} className="px-3 text-[12.5px]">
-                {c}
+                {CAT_LABEL[c] ?? c}
               </Toggle>
             ))}
           </ToggleGroup>
@@ -127,17 +153,22 @@ function Pos() {
           }
         />
         <Field className="mb-3">
-          <FieldLabel>Charge to</FieldLabel>
+          <FieldLabel>Assigned to</FieldLabel>
           <Select
-            items={targets}
-            value={cartTarget ?? "counter"}
-            onValueChange={(v) => setCartTarget(v === "counter" ? null : (v as string))}
+            items={assigned}
+            value={assignValue}
+            onValueChange={(v) => {
+              const val = v as string;
+              if (val === "walk") setCartTarget(null);
+              else if (val.startsWith("pc:")) setCartTarget(val.slice(3));
+              else setCartMember(val.slice(2));
+            }}
           >
             <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {targets.map((t) => (
+              {assigned.map((t) => (
                 <SelectItem key={t.value} value={t.value}>
                   {t.label}
                 </SelectItem>
@@ -146,12 +177,12 @@ function Pos() {
           </Select>
         </Field>
         {cart.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-8 text-[var(--lq-text-dim)]">
+          <div className="flex flex-col items-center gap-2 py-6 text-[var(--lq-text-dim)]">
             <ShoppingBag size={24} />
             <span className="text-[13px]">Empty</span>
           </div>
         ) : (
-          <Scroll className="max-h-[300px]">
+          <Scroll className="max-h-[260px]">
             <div className="flex flex-col gap-1.5 pr-2">
               {cart.map((l) => {
                 const p = products.find((x) => x.id === l.productId)!;
@@ -175,7 +206,59 @@ function Pos() {
             </div>
           </Scroll>
         )}
-        <div className="hair mt-4 flex items-end justify-between border-t pt-3">
+
+        <div className="hair mt-3 flex flex-col gap-3 border-t pt-3">
+          <Field>
+            <FieldLabel>Discount</FieldLabel>
+            <Select items={DISCOUNTS} value={disc} onValueChange={(v) => setDisc(v as string)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DISCOUNTS.map((d) => (
+                  <SelectItem key={d.value} value={d.value}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <div>
+            <div className="label mb-1.5">Payment</div>
+            <ToggleGroup
+              value={[payEff]}
+              onValueChange={(v) => v[0] && setPay(v[0] as PayMethod)}
+              className="w-full"
+              glass={{ contentClassName: "w-full" }}
+              aria-label="Payment method"
+            >
+              {PAY.map(({ v, label, icon: Icon }) => (
+                <Toggle key={v} value={v} disabled={!can[v]} className="flex-1 justify-center gap-1 px-1.5 text-[11.5px]">
+                  <Icon size={13} /> {label}
+                </Toggle>
+              ))}
+            </ToggleGroup>
+            {pay !== payEff && (
+              <div className="mt-1.5 text-[11.5px] text-[var(--lq-text-dim)]">
+                {pay === "balance" ? "Assign a member for balance" : "Assign a PC for a tab"}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="f-mono mt-3 flex flex-col gap-1 text-[12.5px]">
+          <div className="flex justify-between text-[var(--lq-text-dim)]">
+            <span>Subtotal</span>
+            <span>{usd(sub)}</span>
+          </div>
+          {discount > 0 && (
+            <div className="flex justify-between text-emerald-500">
+              <span>Discount</span>
+              <span>-{usd(discount)}</span>
+            </div>
+          )}
+        </div>
+        <div className="hair mt-2 flex items-end justify-between border-t pt-3">
           <span className="label">Total</span>
           <span className="f-display num text-[28px] leading-none font-bold">{usd(total)}</span>
         </div>
@@ -184,11 +267,19 @@ function Pos() {
           className="mt-3 w-full"
           disabled={cart.length === 0}
           onClick={() => {
-            const r = checkout();
-            toast.add({ title: "Order placed", description: `${r.count} items · ${usd(r.total)}${r.target ? ` → ${r.target}` : ""}` });
+            const r = checkout(payEff, Number(disc));
+            if (!r.ok) {
+              toast.add({ title: "Can't complete order", description: r.reason });
+              return;
+            }
+            toast.add({
+              title: r.target ? "Order sent" : "Order placed",
+              description: `${r.count} items · ${usd(r.total)}${r.target ? ` → ${r.target}` : ""}`,
+            });
+            setDisc("0");
           }}
         >
-          Checkout
+          {cartTarget ? "Send Order" : "Checkout"}
         </Button>
       </Panel>
     </div>
@@ -237,7 +328,8 @@ function Floor() {
 
 function StationTile({ s, onOpen }: { s: Station; onOpen: () => void }) {
   const now = useNow();
-  const { extendSession, endSession, setMaintenance, startSession } = useApp();
+  const { extendSession, endSession, setMaintenance, startSession, toggleLock } = useApp();
+  const locked = useApp((st) => !!st.locked[s.id]);
   const left = s.endsAt ? s.endsAt - now : 0;
   return (
     <ContextMenu>
@@ -245,7 +337,10 @@ function StationTile({ s, onOpen }: { s: Station; onOpen: () => void }) {
         render={
           <button type="button" onClick={onOpen} className="press row-flat flex min-h-[92px] flex-col justify-between p-3 text-left">
             <span className="flex items-center justify-between">
-              <span className="f-mono text-[13px] font-semibold">{s.id}</span>
+              <span className="f-mono flex items-center gap-1.5 text-[13px] font-semibold">
+                {s.id}
+                {locked && <Lock size={12} className="text-[var(--lq-text-dim)]" />}
+              </span>
               {s.status === "in-use" ? (
                 <LiveDot tone="accent" />
               ) : (
@@ -277,6 +372,9 @@ function StationTile({ s, onOpen }: { s: Station; onOpen: () => void }) {
           <ContextMenuItem onClick={() => startSession(s.id, 60)}>Start 1h</ContextMenuItem>
         ) : null}
         <ContextMenuSeparator />
+        <ContextMenuItem onClick={() => toggleLock(s.id)}>
+          {locked ? <Unlock size={14} /> : <Lock size={14} />} {locked ? "Unlock" : "Lock"}
+        </ContextMenuItem>
         <ContextMenuItem onClick={() => setMaintenance(s.id, s.status !== "maintenance")}>
           <Wrench size={14} /> {s.status === "maintenance" ? "Return to service" : "Maintenance"}
         </ContextMenuItem>
@@ -296,7 +394,8 @@ function StationDrawer({ station, onClose }: { station: Station | null; onClose:
   const now = useNow();
   const toast = useToast();
   const members = useApp((s) => s.members);
-  const { startSession, extendSession, endSession, setMaintenance, setCartTarget, setCafeMode } = useApp();
+  const { startSession, extendSession, endSession, setMaintenance, setCartTarget, setCafeMode, toggleLock } = useApp();
+  const locked = useApp((x) => (station ? !!x.locked[station.id] : false));
   const [dur, setDur] = useState("60");
   const [who, setWho] = useState("Walk-in");
   const memberItems = [
@@ -325,8 +424,8 @@ function StationDrawer({ station, onClose }: { station: Station | null; onClose:
                   <div className="mt-2 text-[12.5px] text-[var(--lq-text-dim)]">{s.member}</div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button onClick={() => extendSession(s.id, 30)}>+30m</Button>
-                  <Button onClick={() => extendSession(s.id, 60)}>+1h</Button>
+                  <Button onClick={() => extendSession(s.id, 30)}>Add 30m</Button>
+                  <Button onClick={() => extendSession(s.id, 60)}>Add 1h</Button>
                 </div>
                 <Button
                   onClick={() => {
@@ -335,7 +434,7 @@ function StationDrawer({ station, onClose }: { station: Station | null; onClose:
                     onClose();
                   }}
                 >
-                  Order food
+                  Order Food/Drinks for PC
                 </Button>
                 <Button
                   variant="danger"
@@ -390,10 +489,22 @@ function StationDrawer({ station, onClose }: { station: Station | null; onClose:
                 >
                   Start Session
                 </Button>
+                <Button
+                  onClick={() => {
+                    setCartTarget(s.id);
+                    setCafeMode("pos");
+                    onClose();
+                  }}
+                >
+                  Order Food/Drinks for PC
+                </Button>
               </>
             )}
 
             <div className="mt-auto flex flex-col gap-3">
+              <Button onClick={() => toggleLock(s.id)}>
+                {locked ? <Unlock size={14} /> : <Lock size={14} />} {locked ? "Unlock PC" : "Lock PC"}
+              </Button>
               <SwitchLabel>
                 Maintenance
                 <Switch checked={s.status === "maintenance"} onCheckedChange={(c) => setMaintenance(s.id, c)} />
